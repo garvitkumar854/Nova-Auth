@@ -1,14 +1,29 @@
 const config = require("../config/config");
+
+// Models
 const userModel = require("../models/user.model");
 const sessionModel = require("../models/session.model");
+const otpModel = require("../models/otp.model");
+
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+// Utils
+const { sendOTPEmail } = require("../services/email.service");
+const { generateOTP } = require("../utils/otpGenerator");
+
+// Shared cookie policy for refresh token operations.
+// Keeping these options in one place ensures set/clear behavior stays consistent.
+const REFRESH_COOKIE_OPTIONS = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+};
+
 async function register(req, res) {
     try {
-        // Get Data from Request Body
+        // Process 1: read and normalize incoming registration data.
         const { fullName, username, email, password, role = "user" } = req.body;
-        // Normalize username and email to lowercase and trim whitespace
         const normalizedUsername = String(username || "")
             .toLowerCase()
             .trim();
@@ -16,21 +31,21 @@ async function register(req, res) {
             .toLowerCase()
             .trim();
 
-        // Check if any Data field is missing or not
+        // Process 2: basic input validation.
         if (!fullName || !password || !normalizedUsername || !normalizedEmail) {
             return res.status(400).json({
                 message: "fullName, username, email, and password are required",
             });
         }
 
-        // Check password length must be > 8
+        // Process 3: enforce password policy.
         if (String(password).length < 8) {
             return res
                 .status(400)
                 .json({ message: "Password must be at least 8 characters long" });
         }
 
-        // Check if User Already Exists
+        // Process 4: block duplicate username/email accounts.
         const isUserAlreadyExists = await userModel.findOne({
             $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
         });
@@ -43,7 +58,7 @@ async function register(req, res) {
                 });
         }
 
-        // Create New User
+        // Process 5: create user with hashed password.
         const newUser = await userModel.create({
             fullName,
             username: normalizedUsername,
@@ -52,40 +67,19 @@ async function register(req, res) {
             role,
         });
 
-        /*Email
-                    Verification 
-                                Logic
-                                    Comes here.. 
-            */
+        // Process 6: generate short-lived OTP for email verification.
+        const { otp, expiry } = generateOTP();
 
-        const accessToken = jwt.sign(
-            {
-                id: newUser._id,
-                role: newUser.role,
-            },
-            config.JWT_SECRET,
-            {
-                expiresIn: "15m",
-            },
-        );
-
-        const refreshToken = jwt.sign(
-            {
-                id: newUser._id,
-                role: newUser.role,
-            },
-            config.JWT_SECRET,
-            {
-                expiresIn: "7d",
-            },
-        );
-
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "strict",
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        // Process 7: store only hashed OTP so plain OTP is never persisted.
+        await otpModel.create({
+            user: newUser._id,
+            email: normalizedEmail,
+            otp: await bcrypt.hash(otp, 10),
+            expiresAt: expiry,
         });
+
+        // Process 8: send plain OTP to user email.
+        await sendOTPEmail(normalizedEmail, otp);
 
         return res.status(201).json({
             message: "User registered successfully",
@@ -95,7 +89,7 @@ async function register(req, res) {
                 username: newUser.username,
                 email: newUser.email,
                 role: newUser.role,
-                accessToken,
+                verified: newUser.isVerified,
             },
         });
     } catch (error) {
@@ -106,35 +100,34 @@ async function register(req, res) {
 
 async function login(req, res) {
     try {
-        // Get Data from Request Body
+        // Process 1: ensure server auth secret exists before token operations.
+        if (!config.JWT_SECRET) {
+            return res.status(500).json({ message: "JWT secret is not configured" });
+        }
+
+        // Process 2: read and normalize login identity fields.
         const { username, email, password } = req.body;
+        const normalizedEmail = String(email || "").toLowerCase().trim();
+        const normalizedUsername = String(username || "").toLowerCase().trim();
 
-        // Normalize email to lowercase and trim whitespace
-        const normalizedEmail = String(email || "")
-            .toLowerCase()
-            .trim();
-        const normalizedUsername = String(username || "")
-            .toLowerCase()
-            .trim();
-
-        // Check if any Data field is missing or not
+        // Process 3: validate login payload.
         if ((!normalizedEmail && !normalizedUsername) || !password) {
             return res.status(400).json({
                 message: "Either username or email and password are required",
             });
         }
 
-        // Find User by Email or Username
+        // Process 4: locate account by email or username.
         const user = await userModel.findOne({
             $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
         });
 
-        // User not Exists
+        // Process 5: reject unknown users.
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Check the Verification Status of the User
+        // Process 6: block login until email verification is completed.
         if (!user.isVerified) {
             return res
                 .status(401)
@@ -144,14 +137,14 @@ async function login(req, res) {
                 });
         }
 
-        // Check if the provided password matches the user's password
+        // Process 7: validate password hash.
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        // Create new session of the user
+        // Process 8: create a session record for this device/request.
         const session = await sessionModel.create({
             userId: user._id,
             refreshTokenHash: "pending",
@@ -159,7 +152,7 @@ async function login(req, res) {
             userAgent: req.headers["user-agent"] || "Unknown",
         });
 
-        // Generate Refresh Token with sessionId so logout can revoke the exact session.
+        // Process 9: create refresh token that references this session.
         const refreshToken = jwt.sign(
             {
                 id: user._id,
@@ -172,13 +165,15 @@ async function login(req, res) {
             },
         );
 
+        // Process 10: persist hashed refresh token for secure comparison later.
         session.refreshTokenHash = await bcrypt.hash(refreshToken, 10);
         await session.save();
 
-        // Generate Access Token
+        // Process 11: issue short-lived access token for API calls.
         const accessToken = jwt.sign(
             {
                 id: user._id,
+                role: user.role,
                 sessionId: session._id,
             },
             config.JWT_SECRET,
@@ -187,10 +182,9 @@ async function login(req, res) {
             },
         );
 
+        // Process 12: deliver refresh token via secure httpOnly cookie.
         res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
+            ...REFRESH_COOKIE_OPTIONS,
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
@@ -213,17 +207,18 @@ async function login(req, res) {
 
 async function logout(req, res) {
     try {
+        // Process 1: read refresh token from cookie.
         const refreshToken = req.cookies.refreshToken;
 
-        // Refresh Token not Exists
+        // Process 2: stop if refresh token is not present.
         if (!refreshToken) {
             return res.status(400).json({ message: "Refresh token not found" });
         }
 
-        // Decode the Refresh Token to get sessionId and userId
+        // Process 3: decode token to identify user/session.
         const decoded = jwt.verify(refreshToken, config.JWT_SECRET);
 
-        // Find the Session with the sessionId and userId from the decoded token and revoke it by setting revoked to true
+        // Process 4: find the active session and revoke only that one.
         const session = await sessionModel.findOne({
             _id: decoded.sessionId,
             userId: decoded.id,
@@ -234,10 +229,11 @@ async function logout(req, res) {
             return res.status(400).json({ message: "User Already Logged Out" });
         }
 
+        // Process 5: revoke session and clear refresh cookie.
         session.revoked = true;
         await session.save();
 
-        res.clearCookie("refreshToken");
+        res.clearCookie("refreshToken", REFRESH_COOKIE_OPTIONS);
 
         return res.status(200).json({
             message: "Logout successfully",
@@ -257,20 +253,24 @@ async function logout(req, res) {
 
 async function logoutAll(req, res) {
     try {
+        // Process 1: read current refresh token.
         const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
             return res.status(400).json({ message: "Refresh token not found" });
         }
 
+        // Process 2: decode current user id.
         const decoded = jwt.verify(refreshToken, config.JWT_SECRET);
 
+        // Process 3: revoke every active session for the user.
         await sessionModel.updateMany(
             { userId: decoded.id, revoked: false },
             { revoked: true },
         );
 
-        res.clearCookie("refreshToken");
+        // Process 4: clear cookie on current device.
+        res.clearCookie("refreshToken", REFRESH_COOKIE_OPTIONS);
 
         return res.status(200).json({
             message: "Logout from all devices successfully",
@@ -283,6 +283,7 @@ async function logoutAll(req, res) {
 
 async function refreshToken(req, res) {
     try {
+        // Process 1: read refresh token from cookie.
         const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
@@ -291,15 +292,17 @@ async function refreshToken(req, res) {
                 .json({ message: "Refresh token not found, please login again" });
         }
 
+        // Process 2: decode token to get user/session ids.
         const decoded = jwt.verify(refreshToken, config.JWT_SECRET);
 
+        // Process 3: make sure linked user still exists.
         const user = await userModel.findById(decoded.id);
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Find the Session with the sessionId and userId from the decoded token and check if it's not revoked
+        // Process 4: fetch active session for this token.
         const session = await sessionModel.findOne({
             _id: decoded.sessionId,
             userId: decoded.id,
@@ -312,6 +315,7 @@ async function refreshToken(req, res) {
                 .json({ message: "Invalid refresh token, please login again" });
         }
 
+        // Process 5: compare plain token with stored hash.
         const isTokenValid = await bcrypt.compare(
             refreshToken,
             session.refreshTokenHash,
@@ -323,6 +327,7 @@ async function refreshToken(req, res) {
                 .json({ message: "Invalid refresh token, please login again" });
         }
 
+        // Process 6: issue new access token.
         const accessToken = jwt.sign(
             {
                 id: user._id,
@@ -334,6 +339,7 @@ async function refreshToken(req, res) {
             },
         );
 
+        // Process 7: rotate refresh token so old one cannot be reused.
         const newRefreshToken = jwt.sign(
             {
                 id: user._id,
@@ -346,13 +352,13 @@ async function refreshToken(req, res) {
             },
         );
 
+        // Process 8: store new refresh token hash.
         session.refreshTokenHash = await bcrypt.hash(newRefreshToken, 10);
         await session.save();
 
+        // Process 9: send refreshed cookie and access token response.
         res.cookie("refreshToken", newRefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
+            ...REFRESH_COOKIE_OPTIONS,
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
@@ -366,4 +372,52 @@ async function refreshToken(req, res) {
     }
 }
 
-module.exports = { register, login, logout, logoutAll, refreshToken };
+async function verifyEmail(req, res) {
+    try {
+        // Process 1: read verification payload.
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({ message: "Email and otp are required" });
+        }
+
+        // Process 2: fetch user record.
+        const user = await userModel.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Process 3: read latest OTP entry for the user.
+        const latestOtp = await otpModel.findOne({ user: user._id }).sort({ createdAt: -1 });
+
+        if (!latestOtp) {
+            return res.status(400).json({ message: "OTP not found" });
+        }
+
+        // Process 4: reject expired OTP codes.
+        if (latestOtp.expiresAt < new Date()) {
+            return res.status(400).json({ message: "OTP expired" });
+        }
+
+        // Process 5: compare provided OTP against hashed stored OTP.
+        const isValidOtp = await bcrypt.compare(String(otp), latestOtp.otp);
+
+        if (!isValidOtp) {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+
+        // Process 6: mark account verified and clean OTP records.
+        user.isVerified = true;
+        await user.save();
+
+        await otpModel.deleteMany({ user: user._id });
+
+        return res.status(200).json({ message: "Email verified successfully" });
+    } catch (error) {
+        console.error("Error in verify email controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+module.exports = { register, login, logout, logoutAll, refreshToken, verifyEmail };

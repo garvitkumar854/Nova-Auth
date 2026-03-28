@@ -5,7 +5,7 @@ const config = require('./src/config/config');
 
 async function startServer(){
     await connectDB();
-    const port = process.env.PORT || 5000;
+    const port = config.port || 5000;
 
     app.listen(port, () => {
         console.log(`Server is running on port ${port}`);

@@ -12,7 +12,10 @@ authRouter.post('/logout', authController.logout);
 
 authRouter.post('/logout-all', authController.logoutAll);
 
-authRouter.get('/refresh-token', authController.refreshToken);
+authRouter.post('/verify-email', authController.verifyEmail);
+
+authRouter.post('/refresh-token', authController.refreshToken);
+
 
 
 module.exports = authRouter;
