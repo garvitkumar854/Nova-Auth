@@ -20,40 +20,67 @@ transporter.verify((error, success) => {
     }
 });
 
+function buildEmailLayout({ preheader, title, subtitle, bodyHtml, accent = '#0f766e' }) {
+    return `
+        <div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">${preheader}</div>
+        <div style="margin:0;padding:28px 0;background:radial-gradient(circle at top left,#e0f2fe 0%,#f8fafc 40%,#eef2ff 100%);font-family:'Trebuchet MS','Segoe UI',Arial,Helvetica,sans-serif;color:#0f172a;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px;margin:0 auto;padding:0 14px;">
+                <tr>
+                    <td>
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-radius:18px;overflow:hidden;background:#ffffff;border:1px solid #dbeafe;box-shadow:0 14px 45px rgba(15,23,42,0.08);">
+                            <tr>
+                                <td style="padding:30px 30px 24px;background:linear-gradient(120deg, ${accent} 0%, #1d4ed8 100%);color:#ffffff;">
+                                    <p style="margin:0;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;opacity:0.9;">Nova Auth</p>
+                                    <h1 style="margin:10px 0 0;font-size:28px;line-height:1.25;font-weight:700;">${title}</h1>
+                                    <p style="margin:10px 0 0;font-size:15px;line-height:1.6;opacity:0.96;">${subtitle}</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:28px 30px 26px;">
+                                    ${bodyHtml}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:18px 30px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+                                    <p style="margin:0;font-size:12px;line-height:1.6;color:#64748b;">This is an automated security email from Nova Auth.</p>
+                                    <p style="margin:6px 0 0;font-size:12px;line-height:1.6;color:#94a3b8;">Please do not reply directly to this message.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    `;
+}
+
 async function sendOTPEmail(to, otp) {
     try {
+        const otpBody = `
+            <p style="margin:0 0 14px;font-size:16px;line-height:1.75;color:#1e293b;">Use this one-time passcode to verify your email address and secure your account.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 14px;">
+                <tr>
+                    <td style="padding:16px 24px;border-radius:12px;background:#ecfeff;border:1px solid #99f6e4;">
+                        <span style="font-size:34px;line-height:1;letter-spacing:8px;font-weight:800;color:#0f766e;">${otp}</span>
+                    </td>
+                </tr>
+            </table>
+            <p style="margin:0 0 10px;font-size:14px;line-height:1.7;color:#334155;">This code expires in <strong>10 minutes</strong>.</p>
+            <p style="margin:0;font-size:14px;line-height:1.7;color:#64748b;">If you did not request this code, you can ignore this email and your account remains safe.</p>
+        `;
+
         const info = await transporter.sendMail({
             from: config.GOOGLE_USER,
             to,
-            subject: 'Your Nova Auth verification code',
-            text: `Nova Auth email verification\n\nYour one-time code is: ${otp}\n\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this email.`,
-            html: `
-                <div style="margin:0; padding:24px 0; background:#f4f7fb; font-family:Arial,Helvetica,sans-serif; color:#1f2937;">
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
-                        <tr>
-                            <td style="padding:28px 28px 18px; background:linear-gradient(135deg, #0f766e 0%, #155e75 100%); color:#ffffff;">
-                                <h1 style="margin:0; font-size:22px; line-height:1.3;">Nova Auth Verification</h1>
-                                <p style="margin:8px 0 0; font-size:14px; opacity:0.95;">Use the code below to complete your sign in.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding:26px 28px 22px;">
-                                <p style="margin:0 0 14px; font-size:15px; color:#111827;">Hello,</p>
-                                <p style="margin:0 0 18px; font-size:15px; color:#374151;">Here is your one-time verification code:</p>
-                                <div style="display:inline-block; padding:14px 20px; border:1px dashed #0f766e; background:#ecfeff; border-radius:10px; font-size:30px; letter-spacing:8px; font-weight:700; color:#0f766e;">${otp}</div>
-                                <p style="margin:18px 0 0; font-size:14px; color:#4b5563;">This code expires in <strong>10 minutes</strong>.</p>
-                                <p style="margin:8px 0 0; font-size:14px; color:#6b7280;">If you did not request this code, you can safely ignore this email.</p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="padding:18px 28px 24px; border-top:1px solid #e5e7eb; background:#f9fafb;">
-                                <p style="margin:0; font-size:12px; color:#6b7280;">For your security, never share this code with anyone.</p>
-                                <p style="margin:8px 0 0; font-size:12px; color:#9ca3af;">Nova Auth</p>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-            `
+            subject: 'Nova Auth verification code',
+            text: `Nova Auth verification\n\nYour one-time code is: ${otp}\nThis code expires in 10 minutes.\n\nIf you did not request this code, you can ignore this email.`,
+            html: buildEmailLayout({
+                preheader: 'Use this secure code to verify your Nova Auth account.',
+                title: 'Verify Your Email',
+                subtitle: 'Complete your signup by entering the one-time code below.',
+                bodyHtml: otpBody,
+                accent: '#0f766e',
+            }),
         });
         console.log('OTP email sent:', info.messageId);
     } catch (error) {
@@ -61,6 +88,42 @@ async function sendOTPEmail(to, otp) {
     }
 }
 
-module.exports = {
-    sendOTPEmail
+async function sendEmailVerifiedEmail(to) {
+    try {
+        const verifiedBody = `
+            <p style="margin:0 0 14px;font-size:16px;line-height:1.75;color:#1e293b;">Great news. Your email has been verified successfully and your Nova Auth account is now fully active.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 14px;">
+                <tr>
+                    <td style="padding:12px 16px;border-radius:999px;background:#eff6ff;border:1px solid #bfdbfe;">
+                        <span style="font-size:14px;font-weight:700;color:#1d4ed8;">Status: Verified</span>
+                    </td>
+                </tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#334155;">You can now sign in and use all protected features.</p>
+            <p style="margin:0;font-size:14px;line-height:1.7;color:#64748b;">If this verification was not done by you, please reset your password immediately.</p>
+        `;
+
+        const info = await transporter.sendMail({
+            from: config.GOOGLE_USER,
+            to,
+            subject: 'Your email is now verified - Nova Auth',
+            text: `Nova Auth account update\n\nYour email has been verified successfully.\nYou can now sign in and access all features.\n\nIf you did not perform this action, reset your password immediately.`,
+            html: buildEmailLayout({
+                preheader: 'Your Nova Auth email verification is complete.',
+                title: 'Email Verified Successfully',
+                subtitle: 'Your account security setup is complete.',
+                bodyHtml: verifiedBody,
+                accent: '#1d4ed8',
+            }),
+        });
+
+        console.log('Email verified notification sent:', info.messageId);
+    } catch (error) {
+        console.log('Error sending verified email notification:', error);
+    }
 }
+
+module.exports = {
+    sendOTPEmail,
+    sendEmailVerifiedEmail,
+};

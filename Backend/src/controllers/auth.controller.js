@@ -9,7 +9,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 // Utils
-const { sendOTPEmail } = require("../services/email.service");
+const { sendOTPEmail, sendEmailVerifiedEmail } = require("../services/email.service");
 const { generateOTP } = require("../utils/otpGenerator");
 
 // Shared cookie policy for refresh token operations.
@@ -412,6 +412,8 @@ async function verifyEmail(req, res) {
         await user.save();
 
         await otpModel.deleteMany({ user: user._id });
+
+        await sendEmailVerifiedEmail(user.email);
 
         return res.status(200).json({ message: "Email verified successfully" });
     } catch (error) {
