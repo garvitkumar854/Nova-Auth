@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime files
+pids/
+*.pid
+*.pid.lock
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Cache/temp
+.cache/
+.tmp/
+tmp/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artifacts
+.nyc_output/
+
+# Frontend framework outputs (future-proof)
+.next/
+out/
+.nuxt/
+.svelte-kit/
+
+# Optional lock for package managers (uncomment if needed)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
