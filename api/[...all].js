@@ -4,9 +4,12 @@ const connectDB = require('../Backend/src/config/database');
 let isConnected = false;
 
 module.exports = async (req, res) => {
-    // Enable CORS for Vercel deployment
-    const origin = req.headers.origin || req.headers.referer;
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Enable CORS for same-origin frontend and preview/custom domains.
+    const origin = req.headers.origin || '';
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');

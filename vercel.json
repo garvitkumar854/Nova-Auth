@@ -3,16 +3,7 @@
   "buildCommand": "cd Frontend && npm install && npm run build && cd ../Backend && npm install",
   "outputDirectory": "Frontend/dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/[...all].js" }
-  ],
-  "routes": [
-    {
-      "src": "/(?!api/).*(?<!\\.[a-zA-Z0-9]+)$",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/[...all].js"
-    }
+    { "source": "/api/(.*)", "destination": "/api/[...all].js" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
