@@ -10,24 +10,16 @@ module.exports = async (req, res) => {
         console.log('Database connected successfully');
     }
 
-    const [pathname, search = ''] = req.url.split('?');
-    const authEndpoints = new Set([
-        '/register',
-        '/login',
-        '/logout',
-        '/logout-all',
-        '/verify-email',
-        '/refresh-token',
-    ]);
+    const pathname = req.url.split('?')[0];
 
     if (pathname === '/' || pathname === '/api' || pathname === '/api/') {
         req.url = '/';
-    } else if (authEndpoints.has(pathname)) {
-        req.url = `/api/auth${pathname}${search ? `?${search}` : ''}`;
+    } else if (pathname === '/register' || pathname === '/login' || pathname === '/logout' || pathname === '/logout-all' || pathname === '/verify-email' || pathname === '/refresh-token') {
+        req.url = `/api/auth${req.url}`;
     } else if (pathname === '/auth' || pathname.startsWith('/auth/')) {
-        req.url = `/api${pathname}${search ? `?${search}` : ''}`;
+        req.url = `/api${req.url}`;
     } else if (!pathname.startsWith('/api/')) {
-        req.url = `/api${pathname}${search ? `?${search}` : ''}`;
+        req.url = `/api${req.url}`;
     }
 
     console.log(`[API] ${req.method} ${req.url}`);

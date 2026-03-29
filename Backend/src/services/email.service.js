@@ -2,74 +2,25 @@ const nodemailer = require('nodemailer');
 const config = require('../config/config');
 
 let isEmailTransportReady = false;
-let transporter = null;
+const transporter = nodemailer.createTransport({
+    host: config.BREVO_SMTP_HOST,
+    port: Number(config.BREVO_SMTP_PORT || 587),
+    secure: false,
+    auth: {
+        user: config.BREVO_SMTP_USER,
+        pass: config.BREVO_SMTP_PASS,
+    },
+});
 
-function createTransporter() {
-    const hasBrevoConfig =
-        config.BREVO_SMTP_HOST &&
-        config.BREVO_SMTP_USER &&
-        config.BREVO_SMTP_PASS;
-
-    if (hasBrevoConfig) {
-        console.log('Email provider selected: Brevo SMTP');
-        return nodemailer.createTransport({
-            host: config.BREVO_SMTP_HOST,
-            port: Number(config.BREVO_SMTP_PORT || 587),
-            secure: false,
-            auth: {
-                user: config.BREVO_SMTP_USER,
-                pass: config.BREVO_SMTP_PASS,
-            },
-        });
-    }
-
-    const hasGoogleConfig =
-        config.GOOGLE_USER &&
-        config.GOOGLE_CLIENT_ID &&
-        config.GOOGLE_CLIENT_SECRET &&
-        config.GOOGLE_REFRESH_TOKEN;
-
-    if (hasGoogleConfig) {
-        console.log('Email provider selected: Gmail OAuth2');
-        return nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                type: 'OAuth2',
-                user: config.GOOGLE_USER,
-                clientId: config.GOOGLE_CLIENT_ID,
-                clientSecret: config.GOOGLE_CLIENT_SECRET,
-                refreshToken: config.GOOGLE_REFRESH_TOKEN,
-            },
-        });
-    }
-
-    return null;
-}
-
-function getFromAddress() {
-    return config.EMAIL_FROM || config.BREVO_SMTP_USER || config.GOOGLE_USER;
-}
-
-async function ensureTransportReady() {
-    if (!transporter) {
-        transporter = createTransporter();
-    }
-
-    if (!transporter) {
+transporter.verify((error) => {
+    if (error) {
         isEmailTransportReady = false;
-        throw new Error('Email provider is not configured');
-    }
-
-    try {
-        await transporter.verify();
+        console.error('Email transporter is not ready:', error.message);
+    } else {
         isEmailTransportReady = true;
-        return transporter;
-    } catch (error) {
-        isEmailTransportReady = false;
-        console.error('Error verifying email transporter:', error);
-        throw error;
+        console.log('Email transporter is ready');
     }
-}
+});
 
 function getEmailTransportStatus() {
     return isEmailTransportReady;
@@ -111,8 +62,7 @@ function buildEmailLayout({ preheader, title, subtitle, bodyHtml, accent = '#0f7
 
 async function sendOTPEmail(to, otp) {
     try {
-        const activeTransporter = await ensureTransportReady();
-        const from = getFromAddress();
+        const from = config.EMAIL_FROM || config.BREVO_SMTP_USER;
 
         if (!from) {
             throw new Error('EMAIL_FROM is not configured');
@@ -131,7 +81,7 @@ async function sendOTPEmail(to, otp) {
             <p style="margin:0;font-size:14px;line-height:1.7;color:#64748b;">If you did not request this code, you can ignore this email and your account remains safe.</p>
         `;
 
-        const info = await activeTransporter.sendMail({
+        const info = await transporter.sendMail({
             from,
             to,
             subject: 'Nova Auth verification code',
@@ -155,8 +105,7 @@ async function sendOTPEmail(to, otp) {
 
 async function sendEmailVerifiedEmail(to) {
     try {
-        const activeTransporter = await ensureTransportReady();
-        const from = getFromAddress();
+        const from = config.EMAIL_FROM || config.BREVO_SMTP_USER;
 
         if (!from) {
             throw new Error('EMAIL_FROM is not configured');
@@ -175,7 +124,7 @@ async function sendEmailVerifiedEmail(to) {
             <p style="margin:0;font-size:14px;line-height:1.7;color:#64748b;">If this verification was not done by you, please reset your password immediately.</p>
         `;
 
-        const info = await activeTransporter.sendMail({
+        const info = await transporter.sendMail({
             from,
             to,
             subject: 'Your email is now verified - Nova Auth',

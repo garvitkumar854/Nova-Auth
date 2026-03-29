@@ -39,13 +39,10 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/auth', authRoutes);
 
 app.use((req, res) => {
 	return res.status(404).json({
 		message: 'Route not found',
-		method: req.method,
-		path: req.originalUrl || req.url,
 	});
 });
 
