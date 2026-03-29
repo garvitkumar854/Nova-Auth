@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 
 const authRoutes = require('./routes/auth.routes');
 const config = require('./config/config');
+const { getEmailTransportStatus } = require('./services/email.service');
 
 const cookieParser = require('cookie-parser');
 
@@ -17,7 +19,14 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.get('/', (req, res) => {
-	return res.status(200).json({ message: 'Nova Auth API is running' });
+	return res.status(200).json({
+		message: 'Nova Auth API is running',
+		status: {
+			server: 'running',
+			databaseConnected: mongoose.connection.readyState === 1,
+			emailTransportReady: getEmailTransportStatus(),
+		},
+	});
 });
 
 app.get('/api/health', (req, res) => {
@@ -31,6 +40,14 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/auth', authRoutes);
+
+app.use((req, res) => {
+	return res.status(404).json({
+		message: 'Route not found',
+		method: req.method,
+		path: req.originalUrl || req.url,
+	});
+});
 
 
 module.exports = app;

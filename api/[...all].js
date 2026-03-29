@@ -10,9 +10,22 @@ module.exports = async (req, res) => {
         console.log('Database connected successfully');
     }
 
-    // Vercel can pass stripped paths (e.g. /auth/register). Normalize to app's API prefix.
-    if (!req.url.startsWith('/api/')) {
-        req.url = `/api${req.url}`;
+    const [pathname, search = ''] = req.url.split('?');
+    const authEndpoints = new Set([
+        '/register',
+        '/login',
+        '/logout',
+        '/logout-all',
+        '/verify-email',
+        '/refresh-token',
+    ]);
+
+    if (authEndpoints.has(pathname)) {
+        req.url = `/api/auth${pathname}${search ? `?${search}` : ''}`;
+    } else if (pathname === '/auth' || pathname.startsWith('/auth/')) {
+        req.url = `/api${pathname}${search ? `?${search}` : ''}`;
+    } else if (!pathname.startsWith('/api/')) {
+        req.url = `/api${pathname}${search ? `?${search}` : ''}`;
     }
 
     console.log(`[API] ${req.method} ${req.url}`);

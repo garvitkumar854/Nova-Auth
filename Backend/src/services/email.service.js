@@ -1,6 +1,8 @@
 const nodemailer = require('nodemailer');
 const config = require('../config/config');
 
+let isEmailTransportReady = false;
+
 const transporter = nodemailer.createTransport({
     host: config.BREVO_SMTP_HOST,
     port: Number(config.BREVO_SMTP_PORT || 587),
@@ -13,11 +15,17 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify((error, success) => {
     if (error) {
+        isEmailTransportReady = false;
         console.error('Error setting up email transporter:', error);
     } else {
+        isEmailTransportReady = true;
         console.log('Email transporter is ready to send emails.');
     }
 });
+
+function getEmailTransportStatus() {
+    return isEmailTransportReady;
+}
 
 function buildEmailLayout({ preheader, title, subtitle, bodyHtml, accent = '#0f766e' }) {
     return `
@@ -125,4 +133,5 @@ async function sendEmailVerifiedEmail(to) {
 module.exports = {
     sendOTPEmail,
     sendEmailVerifiedEmail,
+    getEmailTransportStatus,
 };
