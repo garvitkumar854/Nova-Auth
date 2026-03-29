@@ -7,10 +7,15 @@ const otpModel = require("../models/otp.model");
 
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 
 // Utils
 const { sendOTPEmail, sendEmailVerifiedEmail } = require("../services/email.service");
 const { generateOTP } = require("../utils/otpGenerator");
+const { parseUserAgent } = require("../utils/userAgentParser");
+
+const USERNAME_REGEX = /^[a-z0-9_]{3,16}$/;
+const EMAIL_REGEX = /^[\w-.]+@([\w-]+\.)+[\w-]{2,}$/;
 
 // Shared cookie policy for refresh token operations.
 // Keeping these options in one place ensures set/clear behavior stays consistent.
@@ -24,6 +29,7 @@ async function register(req, res) {
     try {
         // Process 1: read and normalize incoming registration data.
         const { fullName, username, email, password, role = "user" } = req.body;
+        const normalizedFullName = String(fullName || "").trim();
         const normalizedUsername = String(username || "")
             .toLowerCase()
             .trim();
@@ -32,10 +38,26 @@ async function register(req, res) {
             .trim();
 
         // Process 2: basic input validation.
-        if (!fullName || !password || !normalizedUsername || !normalizedEmail) {
+        if (!normalizedFullName || !password || !normalizedUsername || !normalizedEmail) {
             return res.status(400).json({
                 message: "fullName, username, email, and password are required",
             });
+        }
+
+        if (normalizedFullName.length < 2 || normalizedFullName.length > 60) {
+            return res.status(400).json({
+                message: "Full name must be between 2 and 60 characters",
+            });
+        }
+
+        if (!USERNAME_REGEX.test(normalizedUsername)) {
+            return res.status(400).json({
+                message: "Username must be 3-16 characters and contain only letters, numbers, or _",
+            });
+        }
+
+        if (!EMAIL_REGEX.test(normalizedEmail)) {
+            return res.status(400).json({ message: "Please provide a valid email address" });
         }
 
         // Process 3: enforce password policy.
@@ -60,7 +82,7 @@ async function register(req, res) {
 
         // Process 5: create user with hashed password.
         const newUser = await userModel.create({
-            fullName,
+            fullName: normalizedFullName,
             username: normalizedUsername,
             email: normalizedEmail,
             password: await bcrypt.hash(password, 10),
@@ -124,6 +146,16 @@ async function login(req, res) {
         if ((!normalizedEmail && !normalizedUsername) || !password) {
             return res.status(400).json({
                 message: "Either username or email and password are required",
+            });
+        }
+
+        if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
+            return res.status(400).json({ message: "Please provide a valid email address" });
+        }
+
+        if (normalizedUsername && !USERNAME_REGEX.test(normalizedUsername)) {
+            return res.status(400).json({
+                message: "Username must be 3-16 characters and contain only letters, numbers, or _",
             });
         }
 
@@ -375,9 +407,210 @@ async function refreshToken(req, res) {
         return res.status(200).json({
             message: "Access token refreshed successfully",
             accessToken,
+            user: {
+                id: user._id,
+                fullName: user.fullName,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                verified: user.isVerified,
+            },
         });
     } catch (error) {
         console.error("Error in refresh token controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+async function getMe(req, res) {
+    try {
+        const user = await userModel.findById(req.user.id).select("-password");
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.status(200).json({
+            user: {
+                id: user._id,
+                fullName: user.fullName,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                verified: user.isVerified,
+            },
+        });
+    } catch (error) {
+        console.error("Error in get me controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+async function updateFullName(req, res) {
+    try {
+        const fullName = String(req.body.fullName || "").trim();
+
+        if (!fullName) {
+            return res.status(400).json({ message: "Full name is required" });
+        }
+
+        if (fullName.length < 2 || fullName.length > 60) {
+            return res.status(400).json({
+                message: "Full name must be between 2 and 60 characters",
+            });
+        }
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            req.user.id,
+            { fullName },
+            { new: true },
+        ).select("-password");
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.status(200).json({
+            message: "Full name updated successfully",
+            user: {
+                id: updatedUser._id,
+                fullName: updatedUser.fullName,
+                username: updatedUser.username,
+                email: updatedUser.email,
+                role: updatedUser.role,
+                verified: updatedUser.isVerified,
+            },
+        });
+    } catch (error) {
+        console.error("Error in update full name controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+async function updateUsername(req, res) {
+    try {
+        const username = String(req.body.username || "").toLowerCase().trim();
+
+        if (!username) {
+            return res.status(400).json({ message: "Username is required" });
+        }
+
+        if (!USERNAME_REGEX.test(username)) {
+            return res.status(400).json({
+                message: "Username must be 3-16 characters and contain only letters, numbers, or _",
+            });
+        }
+
+        const existingUser = await userModel.findOne({
+            username,
+            _id: { $ne: req.user.id },
+        });
+
+        if (existingUser) {
+            return res.status(409).json({ message: "Username is already taken" });
+        }
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            req.user.id,
+            { username },
+            { new: true },
+        ).select("-password");
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.status(200).json({
+            message: "Username updated successfully",
+            user: {
+                id: updatedUser._id,
+                fullName: updatedUser.fullName,
+                username: updatedUser.username,
+                email: updatedUser.email,
+                role: updatedUser.role,
+                verified: updatedUser.isVerified,
+            },
+        });
+    } catch (error) {
+        console.error("Error in update username controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+async function getSessions(req, res) {
+    try {
+        const sessions = await sessionModel
+            .find({ userId: req.user.id })
+            .sort({ updatedAt: -1 });
+
+        const data = sessions.map((session) => {
+            const isCurrent = String(session._id) === String(req.user.sessionId);
+            const parsedUA = parseUserAgent(session.userAgent);
+
+            return {
+                id: session._id,
+                browser: parsedUA.browser,
+                os: parsedUA.os,
+                device: parsedUA.device,
+                ipAddress: session.ip || "Unknown",
+                location: "Unknown",
+                lastActive: session.updatedAt,
+                status: session.revoked ? "logged_out" : (isCurrent ? "current" : "active"),
+            };
+        });
+
+        return res.status(200).json({ sessions: data });
+    } catch (error) {
+        console.error("Error in get sessions controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+async function logoutSession(req, res) {
+    try {
+        const sessionId = String(req.body.sessionId || "").trim();
+
+        if (!sessionId) {
+            return res.status(400).json({ message: "sessionId is required" });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ message: "Invalid session id" });
+        }
+
+        const targetSession = await sessionModel.findOne({
+            _id: sessionId,
+            userId: req.user.id,
+        });
+
+        if (!targetSession) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+
+        if (targetSession.revoked) {
+            return res.status(400).json({ message: "Session already logged out" });
+        }
+
+        targetSession.revoked = true;
+        await targetSession.save();
+
+        const isCurrentSession = String(targetSession._id) === String(req.user.sessionId);
+
+        if (isCurrentSession) {
+            res.clearCookie("refreshToken", REFRESH_COOKIE_OPTIONS);
+        }
+
+        return res.status(200).json({
+            message: isCurrentSession
+                ? "Current session logged out successfully"
+                : "Session logged out successfully",
+            session: {
+                id: targetSession._id,
+                current: isCurrentSession,
+            },
+        });
+    } catch (error) {
+        console.error("Error in logout session controller:", error);
         return res.status(500).json({ message: "Internal Server Error" });
     }
 }
@@ -436,4 +669,64 @@ async function verifyEmail(req, res) {
     }
 }
 
-module.exports = { register, login, logout, logoutAll, refreshToken, verifyEmail };
+async function deleteAccount(req, res) {
+    try {
+        const { password } = req.body;
+
+        if (!password) {
+            return res.status(400).json({ message: "Password is required to delete account" });
+        }
+
+        // Process 1: get the user
+        const user = await userModel.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Process 2: verify password
+        const isPasswordValid = await bcrypt.compare(String(password), user.password);
+
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: "Invalid password" });
+        }
+
+        // Process 3: logout all sessions first (revoke them)
+        await sessionModel.updateMany(
+            { userId: user._id },
+            { revoked: true }
+        );
+
+        // Process 4: delete all sessions
+        await sessionModel.deleteMany({ userId: user._id });
+
+        // Process 5: delete all OTP records
+        await otpModel.deleteMany({ user: user._id });
+
+        // Process 6: delete the user account
+        await userModel.findByIdAndDelete(user._id);
+
+        // Process 7: clear refresh token cookie
+        res.clearCookie("refreshToken", REFRESH_COOKIE_OPTIONS);
+
+        return res.status(200).json({ message: "Account deleted successfully" });
+    } catch (error) {
+        console.error("Error in delete account controller:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+module.exports = {
+    register,
+    login,
+    logout,
+    logoutAll,
+    refreshToken,
+    verifyEmail,
+    getMe,
+    updateFullName,
+    updateUsername,
+    getSessions,
+    logoutSession,
+    deleteAccount,
+};

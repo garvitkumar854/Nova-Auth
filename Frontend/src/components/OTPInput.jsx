@@ -1,15 +1,22 @@
 import { useState, useRef } from 'react'
 
-function OTPInput() {
+function OTPInput({ onOtpChange }) {
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const inputRefs = useRef([])
+
+  const commitOtp = (nextOtp) => {
+    setOtp(nextOtp)
+    if (typeof onOtpChange === 'function') {
+      onOtpChange(nextOtp.join(''))
+    }
+  }
 
   const handleChange = (index, value) => {
     if (!/^\d?$/.test(value)) return
 
     const newOtp = [...otp]
     newOtp[index] = value
-    setOtp(newOtp)
+    commitOtp(newOtp)
 
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus()
@@ -21,7 +28,7 @@ function OTPInput() {
       if (otp[index]) {
         const newOtp = [...otp]
         newOtp[index] = ''
-        setOtp(newOtp)
+        commitOtp(newOtp)
       } else if (index > 0) {
         inputRefs.current[index - 1]?.focus()
       }
@@ -44,7 +51,7 @@ function OTPInput() {
     digits.forEach((digit, idx) => {
       if (idx < 6) newOtp[idx] = digit
     })
-    setOtp(newOtp)
+    commitOtp(newOtp)
     const nextEmptyIndex = newOtp.findIndex((d) => d === '')
     if (nextEmptyIndex >= 0) {
       inputRefs.current[nextEmptyIndex]?.focus()

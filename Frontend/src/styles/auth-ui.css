@@ -171,6 +171,12 @@ button:hover {
   filter: brightness(1.04);
 }
 
+button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 button:active {
   transform: translateY(0);
 }
@@ -180,6 +186,33 @@ button:active {
   font-size: 0.91rem;
   color: #4f607d;
   text-align: center;
+}
+
+.form-status {
+  margin: 12px 0 0;
+  font-size: 0.88rem;
+  text-align: center;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.form-status.success {
+  color: #065f46;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.form-status.error {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.verify-email-note {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #334155;
 }
 
 .switch-link {

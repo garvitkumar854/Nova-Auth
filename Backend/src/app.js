@@ -10,9 +10,15 @@ const cookieParser = require('cookie-parser');
 
 const app = express();
 
+const allowedOrigins = [
+	config.CLIENT_URL,
+	'http://localhost:5173',
+	'http://127.0.0.1:5173',
+].filter(Boolean);
+
 // Middlewares
 app.use(cors({
-	origin: config.CLIENT_URL,
+	origin: allowedOrigins,
 	credentials: true,
 }));
 app.use(express.json());
