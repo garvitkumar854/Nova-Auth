@@ -9,7 +9,7 @@ const config = {
 	CLIENT_URL: process.env.CLIENT_URL || 'https://nova-auth-lyart.vercel.app',
 
 	// MongoDB Environment Variable
-	mongoUri: process.env.MONGO_URI,
+	MONGO_URI: process.env.MONGO_URI,
 
 	// Google OAuth Environment Variables
 	GOOGLE_USER: process.env.GOOGLE_USER,
