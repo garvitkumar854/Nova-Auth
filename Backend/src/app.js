@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 
 const authRoutes = require('./routes/auth.routes');
 const config = require('./config/config');
-const { getEmailTransportStatus } = require('./services/email.service');
+const { getEmailTransportStatus, getEmailLastError } = require('./services/email.service');
 
 const cookieParser = require('cookie-parser');
 
@@ -25,6 +25,7 @@ app.get('/', (req, res) => {
 			server: 'running',
 			databaseConnected: mongoose.connection.readyState === 1,
 			emailTransportReady: getEmailTransportStatus(),
+			emailLastError: getEmailLastError(),
 		},
 	});
 });

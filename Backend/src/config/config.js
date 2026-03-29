@@ -22,6 +22,7 @@ const config = {
 	BREVO_SMTP_PORT: process.env.BREVO_SMTP_PORT,
 	BREVO_SMTP_USER: process.env.BREVO_SMTP_USER,
 	BREVO_SMTP_PASS: process.env.BREVO_SMTP_PASS,
+	BREVO_API_KEY: process.env.BREVO_API_KEY,
 	EMAIL_FROM: process.env.EMAIL_FROM
 };
 
