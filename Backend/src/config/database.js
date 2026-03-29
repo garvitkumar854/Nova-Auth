@@ -3,11 +3,13 @@ const config = require('./config');
 
 async function connectDB() {
     try {
-        if (!config.MONGO_URI) {
+        const mongoUri = config.mongoUri || config.MONGO_URI;
+
+        if (!mongoUri) {
             throw new Error('MONGO_URI is not configured');
         }
 
-        await mongoose.connect(config.MONGO_URI);
+        await mongoose.connect(mongoUri);
         console.log('Connected to MongoDB');
     } catch (error) {
         console.error('Error connecting to MongoDB:', error);
