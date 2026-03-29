@@ -2,11 +2,25 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+// Determine CLIENT_URL based on environment
+let CLIENT_URL = process.env.CLIENT_URL;
+if (!CLIENT_URL) {
+	// For Vercel deployment
+	if (process.env.VERCEL_URL) {
+		CLIENT_URL = process.env.VERCEL_ENV === 'production' 
+			? `https://${process.env.VERCEL_URL}`
+			: `https://${process.env.VERCEL_URL}`;
+	} else {
+		// Development default
+		CLIENT_URL = 'https://nova-auth-lyart.vercel.app';
+	}
+}
+
 const config = {
 	JWT_SECRET: process.env.JWT_SECRET,
 	NODE_ENV: process.env.NODE_ENV || 'development',
 	port: Number.parseInt(process.env.PORT || '5000', 10),
-	CLIENT_URL: process.env.CLIENT_URL || 'https://nova-auth-lyart.vercel.app',
+	CLIENT_URL: CLIENT_URL,
 
 	// MongoDB Environment Variable
 	MONGO_URI: process.env.MONGO_URI,
