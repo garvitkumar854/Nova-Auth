@@ -2,26 +2,74 @@ const nodemailer = require('nodemailer');
 const config = require('../config/config');
 
 let isEmailTransportReady = false;
+let transporter = null;
 
-const transporter = nodemailer.createTransport({
-    host: config.BREVO_SMTP_HOST,
-    port: Number(config.BREVO_SMTP_PORT || 587),
-    secure: false,
-    auth: {
-        user: config.BREVO_SMTP_USER,
-        pass: config.BREVO_SMTP_PASS,
-    },
-});
+function createTransporter() {
+    const hasBrevoConfig =
+        config.BREVO_SMTP_HOST &&
+        config.BREVO_SMTP_USER &&
+        config.BREVO_SMTP_PASS;
 
-transporter.verify((error, success) => {
-    if (error) {
-        isEmailTransportReady = false;
-        console.error('Error setting up email transporter:', error);
-    } else {
-        isEmailTransportReady = true;
-        console.log('Email transporter is ready to send emails.');
+    if (hasBrevoConfig) {
+        console.log('Email provider selected: Brevo SMTP');
+        return nodemailer.createTransport({
+            host: config.BREVO_SMTP_HOST,
+            port: Number(config.BREVO_SMTP_PORT || 587),
+            secure: false,
+            auth: {
+                user: config.BREVO_SMTP_USER,
+                pass: config.BREVO_SMTP_PASS,
+            },
+        });
     }
-});
+
+    const hasGoogleConfig =
+        config.GOOGLE_USER &&
+        config.GOOGLE_CLIENT_ID &&
+        config.GOOGLE_CLIENT_SECRET &&
+        config.GOOGLE_REFRESH_TOKEN;
+
+    if (hasGoogleConfig) {
+        console.log('Email provider selected: Gmail OAuth2');
+        return nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                type: 'OAuth2',
+                user: config.GOOGLE_USER,
+                clientId: config.GOOGLE_CLIENT_ID,
+                clientSecret: config.GOOGLE_CLIENT_SECRET,
+                refreshToken: config.GOOGLE_REFRESH_TOKEN,
+            },
+        });
+    }
+
+    return null;
+}
+
+function getFromAddress() {
+    return config.EMAIL_FROM || config.BREVO_SMTP_USER || config.GOOGLE_USER;
+}
+
+async function ensureTransportReady() {
+    if (!transporter) {
+        transporter = createTransporter();
+    }
+
+    if (!transporter) {
+        isEmailTransportReady = false;
+        throw new Error('Email provider is not configured');
+    }
+
+    try {
+        await transporter.verify();
+        isEmailTransportReady = true;
+        return transporter;
+    } catch (error) {
+        isEmailTransportReady = false;
+        console.error('Error verifying email transporter:', error);
+        throw error;
+    }
+}
 
 function getEmailTransportStatus() {
     return isEmailTransportReady;
@@ -63,6 +111,13 @@ function buildEmailLayout({ preheader, title, subtitle, bodyHtml, accent = '#0f7
 
 async function sendOTPEmail(to, otp) {
     try {
+        const activeTransporter = await ensureTransportReady();
+        const from = getFromAddress();
+
+        if (!from) {
+            throw new Error('EMAIL_FROM is not configured');
+        }
+
         const otpBody = `
             <p style="margin:0 0 14px;font-size:16px;line-height:1.75;color:#1e293b;">Use this one-time passcode to verify your email address and secure your account.</p>
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 14px;">
@@ -76,8 +131,8 @@ async function sendOTPEmail(to, otp) {
             <p style="margin:0;font-size:14px;line-height:1.7;color:#64748b;">If you did not request this code, you can ignore this email and your account remains safe.</p>
         `;
 
-        const info = await transporter.sendMail({
-            from: config.EMAIL_FROM,
+        const info = await activeTransporter.sendMail({
+            from,
             to,
             subject: 'Nova Auth verification code',
             text: `Nova Auth verification\n\nYour one-time code is: ${otp}\nThis code expires in 10 minutes.\n\nIf you did not request this code, you can ignore this email.`,
@@ -89,14 +144,24 @@ async function sendOTPEmail(to, otp) {
                 accent: '#0f766e',
             }),
         });
+        isEmailTransportReady = true;
         console.log('OTP email sent:', info.messageId);
     } catch (error) {
-        console.log('Error sending OTP email:', error);
+        isEmailTransportReady = false;
+        console.error('Error sending OTP email:', error);
+        throw error;
     }
 }
 
 async function sendEmailVerifiedEmail(to) {
     try {
+        const activeTransporter = await ensureTransportReady();
+        const from = getFromAddress();
+
+        if (!from) {
+            throw new Error('EMAIL_FROM is not configured');
+        }
+
         const verifiedBody = `
             <p style="margin:0 0 14px;font-size:16px;line-height:1.75;color:#1e293b;">Great news. Your email has been verified successfully and your Nova Auth account is now fully active.</p>
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 14px;">
@@ -110,8 +175,8 @@ async function sendEmailVerifiedEmail(to) {
             <p style="margin:0;font-size:14px;line-height:1.7;color:#64748b;">If this verification was not done by you, please reset your password immediately.</p>
         `;
 
-        const info = await transporter.sendMail({
-            from: config.EMAIL_FROM,
+        const info = await activeTransporter.sendMail({
+            from,
             to,
             subject: 'Your email is now verified - Nova Auth',
             text: `Nova Auth account update\n\nYour email has been verified successfully.\nYou can now sign in and access all features.\n\nIf you did not perform this action, reset your password immediately.`,
@@ -124,9 +189,12 @@ async function sendEmailVerifiedEmail(to) {
             }),
         });
 
+        isEmailTransportReady = true;
         console.log('Email verified notification sent:', info.messageId);
     } catch (error) {
-        console.log('Error sending verified email notification:', error);
+        isEmailTransportReady = false;
+        console.error('Error sending verified email notification:', error);
+        throw error;
     }
 }
 

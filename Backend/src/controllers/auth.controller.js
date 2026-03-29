@@ -79,7 +79,17 @@ async function register(req, res) {
         });
 
         // Process 8: send plain OTP to user email.
-        await sendOTPEmail(normalizedEmail, otp);
+        try {
+            await sendOTPEmail(normalizedEmail, otp);
+        } catch (emailError) {
+            await otpModel.deleteMany({ user: newUser._id });
+            await userModel.deleteOne({ _id: newUser._id });
+
+            console.error('OTP email send failed. Rolled back user registration:', emailError);
+            return res.status(500).json({
+                message: 'Failed to send OTP email. Please try again.',
+            });
+        }
 
         return res.status(201).json({
             message: "User registered successfully",
@@ -413,7 +423,11 @@ async function verifyEmail(req, res) {
 
         await otpModel.deleteMany({ user: user._id });
 
-        await sendEmailVerifiedEmail(user.email);
+        try {
+            await sendEmailVerifiedEmail(user.email);
+        } catch (emailError) {
+            console.error('Email verified notification send failed:', emailError);
+        }
 
         return res.status(200).json({ message: "Email verified successfully" });
     } catch (error) {
