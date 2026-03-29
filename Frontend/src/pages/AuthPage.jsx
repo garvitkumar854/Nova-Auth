@@ -57,9 +57,13 @@ function AuthPage() {
       )}
 
       <p className="test-route-note">
-        UI testing route:{' '}
+        UI testing routes:{' '}
         <a href="/verify-email" className="route-link">
-          Verify email page
+          Verify email
+        </a>
+        {' • '}
+        <a href="/dashboard" className="route-link">
+          Dashboard
         </a>
       </p>
     </AuthShell>
