@@ -20,7 +20,9 @@ module.exports = async (req, res) => {
         '/refresh-token',
     ]);
 
-    if (authEndpoints.has(pathname)) {
+    if (pathname === '/' || pathname === '/api' || pathname === '/api/') {
+        req.url = '/';
+    } else if (authEndpoints.has(pathname)) {
         req.url = `/api/auth${pathname}${search ? `?${search}` : ''}`;
     } else if (pathname === '/auth' || pathname.startsWith('/auth/')) {
         req.url = `/api${pathname}${search ? `?${search}` : ''}`;
