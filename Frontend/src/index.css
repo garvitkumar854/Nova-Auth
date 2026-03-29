@@ -2,6 +2,11 @@
 	box-sizing: border-box;
 }
 
+:root {
+	--font-primary: 'Inter', 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+	--font-display: 'Poppins', 'Inter', 'Segoe UI', sans-serif;
+}
+
 html,
 body,
 #root {
@@ -10,5 +15,9 @@ body,
 }
 
 body {
-	font-family: 'Inter', 'Poppins', sans-serif;
+	font-family: var(--font-primary);
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	-webkit-text-size-adjust: 100%;
 }

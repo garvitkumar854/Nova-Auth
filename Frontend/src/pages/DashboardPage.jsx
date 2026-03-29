@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   getSessions,
   logout,
@@ -21,7 +22,7 @@ function formatLastActive(value) {
   const diffMs = Date.now() - date.getTime()
   const diffMinutes = Math.floor(diffMs / 60000)
 
-  if (diffMinutes < 1) return 'Now'
+  if (diffMinutes < 1) return 'Just Now'
   if (diffMinutes < 60) return `${diffMinutes} min ago`
 
   const diffHours = Math.floor(diffMinutes / 60)
@@ -31,32 +32,14 @@ function formatLastActive(value) {
   return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
 }
 
-function getBrowserIcon(browser) {
-  const browserLower = String(browser || '').toLowerCase()
-  if (browserLower.includes('chrome')) return '🌐'
-  if (browserLower.includes('firefox')) return '🦊'
-  if (browserLower.includes('safari')) return '🧭'
-  if (browserLower.includes('edge')) return '⚡'
-  return '💻'
-}
-
-function getDeviceIcon(device) {
-  const deviceLower = String(device || '').toLowerCase()
-  if (deviceLower.includes('mobile')) return '📱'
-  if (deviceLower.includes('tablet')) return '📱'
-  return '💻'
-}
-
 function DashboardPage() {
+  const shouldReduceMotion = useReducedMotion()
   const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('user') || 'null'))
   const firstName = currentUser?.fullName?.split(' ')[0] || 'User'
   const [sessions, setSessions] = useState([])
   const [activeSidebarSession, setActiveSidebarSession] = useState(null)
 
-  const [showChangeNameForm, setShowChangeNameForm] = useState(false)
-  const [showChangeUsernameForm, setShowChangeUsernameForm] = useState(false)
-  const [showChangePasswordForm, setShowChangePasswordForm] = useState(false)
-  const [showDeleteAccountForm, setShowDeleteAccountForm] = useState(false)
+  const [activePanel, setActivePanel] = useState('')
   const [deleteAccountPassword, setDeleteAccountPassword] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
@@ -199,10 +182,30 @@ function DashboardPage() {
 
   const hasMultipleSessions = sessions.filter(s => s.status !== 'logged_out').length > 1
   const activeSessions = sessions.filter(s => s.status !== 'logged_out')
+  const panelMotion = shouldReduceMotion
+    ? { initial: false, animate: { opacity: 1 }, exit: { opacity: 1 }, transition: { duration: 0 } }
+    : { initial: { height: 0, opacity: 0 }, animate: { height: 'auto', opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.2, ease: 'easeOut' } }
+
+  const handleLogoutCurrent = async () => {
+    setStatusMessage('')
+    try {
+      await logout()
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('user')
+      window.location.href = '/'
+    } catch (error) {
+      setStatusMessage(error.message)
+    }
+  }
 
   return (
     <main className="dashboard-page">
-      <div className="dashboard-card">
+      <motion.div
+        className="dashboard-card"
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: 'easeOut' }}
+      >
         <div className="dashboard-header">
           <h1>Welcome, {firstName}</h1>
           <p className="dashboard-user-info">Manage your account and security settings</p>
@@ -215,12 +218,12 @@ function DashboardPage() {
           <aside className="dashboard-sidebar">
             <h2 className="section-title">Account Settings</h2>
 
-            <div className="settings-group">
+            <motion.div className="settings-group" layout>
               <h3 className="setting-label">Profile</h3>
 
               <button
                 className="setting-button"
-                onClick={() => setShowChangeNameForm(!showChangeNameForm)}
+                onClick={() => setActivePanel((prev) => (prev === 'fullName' ? '' : 'fullName'))}
               >
                 <div className="button-text">
                   <span className="button-title">Change Full Name</span>
@@ -228,8 +231,9 @@ function DashboardPage() {
                 </div>
               </button>
 
-              {showChangeNameForm && (
-                <form className="inline-form" onSubmit={handleUpdateFullName}>
+              <AnimatePresence initial={false}>
+              {activePanel === 'fullName' && (
+                <motion.form className="inline-form" onSubmit={handleUpdateFullName} {...panelMotion}>
                   <input
                     type="text"
                     placeholder="Enter new full name"
@@ -244,19 +248,20 @@ function DashboardPage() {
                     <button
                       type="button"
                       className="form-btn form-btn-secondary"
-                      onClick={() => setShowChangeNameForm(false)}
+                      onClick={() => setActivePanel('')}
                     >
                       Cancel
                     </button>
                   </div>
-                </form>
+                </motion.form>
               )}
-            </div>
+              </AnimatePresence>
+            </motion.div>
 
-            <div className="settings-group">
+            <motion.div className="settings-group" layout>
               <button
                 className="setting-button"
-                onClick={() => setShowChangeUsernameForm(!showChangeUsernameForm)}
+                onClick={() => setActivePanel((prev) => (prev === 'username' ? '' : 'username'))}
               >
                 <div className="button-text">
                   <span className="button-title">Change Username</span>
@@ -264,8 +269,9 @@ function DashboardPage() {
                 </div>
               </button>
 
-              {showChangeUsernameForm && (
-                <form className="inline-form" onSubmit={handleUpdateUsername}>
+              <AnimatePresence initial={false}>
+              {activePanel === 'username' && (
+                <motion.form className="inline-form" onSubmit={handleUpdateUsername} {...panelMotion}>
                   <input
                     type="text"
                     placeholder="Enter new username"
@@ -280,21 +286,22 @@ function DashboardPage() {
                     <button
                       type="button"
                       className="form-btn form-btn-secondary"
-                      onClick={() => setShowChangeUsernameForm(false)}
+                      onClick={() => setActivePanel('')}
                     >
                       Cancel
                     </button>
                   </div>
-                </form>
+                </motion.form>
               )}
-            </div>
+              </AnimatePresence>
+            </motion.div>
 
-            <div className="settings-group">
+            <motion.div className="settings-group" layout>
               <h3 className="setting-label">Security</h3>
 
               <button
                 className="setting-button"
-                onClick={() => setShowChangePasswordForm(!showChangePasswordForm)}
+                onClick={() => setActivePanel((prev) => (prev === 'password' ? '' : 'password'))}
               >
                 <div className="button-text">
                   <span className="button-title">Change Password</span>
@@ -302,8 +309,9 @@ function DashboardPage() {
                 </div>
               </button>
 
-              {showChangePasswordForm && (
-                <form className="inline-form">
+              <AnimatePresence initial={false}>
+              {activePanel === 'password' && (
+                <motion.form className="inline-form" {...panelMotion}>
                   <input type="password" placeholder="Current password" />
                   <input type="password" placeholder="New password" />
                   <input type="password" placeholder="Confirm new password" />
@@ -314,19 +322,20 @@ function DashboardPage() {
                     <button
                       type="button"
                       className="form-btn form-btn-secondary"
-                      onClick={() => setShowChangePasswordForm(false)}
+                      onClick={() => setActivePanel('')}
                     >
                       Cancel
                     </button>
                   </div>
-                </form>
+                </motion.form>
               )}
-            </div>
+              </AnimatePresence>
+            </motion.div>
 
-            <div className="settings-group settings-group-danger">
+            <motion.div className="settings-group settings-group-danger" layout>
               <button
                 className="setting-button setting-button-danger"
-                onClick={() => setShowDeleteAccountForm(!showDeleteAccountForm)}
+                onClick={() => setActivePanel((prev) => (prev === 'delete' ? '' : 'delete'))}
               >
                 <div className="button-text">
                   <span className="button-title">Delete Account</span>
@@ -334,8 +343,9 @@ function DashboardPage() {
                 </div>
               </button>
 
-              {showDeleteAccountForm && (
-                <form className="inline-form" onSubmit={handleDeleteAccount}>
+              <AnimatePresence initial={false}>
+              {activePanel === 'delete' && (
+                <motion.form className="inline-form" onSubmit={handleDeleteAccount} {...panelMotion}>
                   <p className="form-warning">This action cannot be undone. All your data will be permanently deleted.</p>
                   <input 
                     type="password" 
@@ -352,16 +362,17 @@ function DashboardPage() {
                       type="button"
                       className="form-btn form-btn-secondary"
                       onClick={() => {
-                        setShowDeleteAccountForm(false)
+                        setActivePanel('')
                         setDeleteAccountPassword('')
                       }}
                     >
                       Cancel
                     </button>
                   </div>
-                </form>
+                </motion.form>
               )}
-            </div>
+              </AnimatePresence>
+            </motion.div>
           </aside>
 
           {/* Middle - Sessions List */}
@@ -377,13 +388,16 @@ function DashboardPage() {
 
             <div className="sessions-list">
               {sessions.map((session) => (
-                <div
+                <motion.div
                   key={session.id}
                   className={`session-item session-${session.status} ${activeSidebarSession?.id === session.id ? 'active-in-sidebar' : ''}`}
                   onClick={() => hasMultipleSessions && setActiveSidebarSession(session)}
+                  initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                  animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                 >
                   <div className="session-device-icon">
-                    {getDeviceIcon(session.device)}
+                    {String(session.device || 'D').slice(0, 1).toUpperCase()}
                   </div>
 
                   <div className="session-info">
@@ -424,14 +438,19 @@ function DashboardPage() {
                       {sessionActionId === String(session.id) ? 'Processing...' : 'Logout'}
                     </button>
                   )}
-                </div>
+                </motion.div>
               ))}
             </div>
           </section>
 
           {/* Right Side - Sessions Sidebar (Premium) */}
           {hasMultipleSessions && (
-            <aside className="sessions-sidebar-premium">
+            <motion.aside
+              className="sessions-sidebar-premium"
+              initial={shouldReduceMotion ? false : { opacity: 0, x: 10 }}
+              animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
               <h3 className="sidebar-title">Active Sessions</h3>
               <p className="sidebar-desc">{activeSessions.length} active device{activeSessions.length !== 1 ? 's' : ''}</p>
 
@@ -444,7 +463,7 @@ function DashboardPage() {
                   >
                     <div className="premium-session-header">
                       <div className="premium-session-icon">
-                        {getBrowserIcon(session.browser)}
+                        {String(session.browser || 'B').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="premium-session-title">
                         <h4>{session.browser}</h4>
@@ -485,7 +504,7 @@ function DashboardPage() {
                   </div>
                 ))}
               </div>
-            </aside>
+            </motion.aside>
           )}
         </div>
 
@@ -493,11 +512,11 @@ function DashboardPage() {
           <button className="logout-all-btn" onClick={handleLogoutAll}>
             Logout All Sessions
           </button>
-          <a href="/" className="back-link">
-            Back to Login
-          </a>
+          <button className="logout-cta-btn" onClick={handleLogoutCurrent}>
+            Logout
+          </button>
         </div>
-      </div>
+      </motion.div>
     </main>
   )
 }

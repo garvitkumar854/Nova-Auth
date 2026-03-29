@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import AuthShell from '../components/AuthShell'
 import { login, register } from '../services/api'
 import '../styles/auth-ui.css'
@@ -124,8 +125,15 @@ function AuthPage() {
 
   return (
     <AuthShell>
+      <AnimatePresence mode="wait">
       {mode === 'register' ? (
-        <>
+        <motion.div
+          key="register"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+        >
           <h1>Create your account</h1>
           <p className="subtitle">Simple, secure, and ready to use.</p>
 
@@ -182,9 +190,15 @@ function AuthPage() {
               Login
             </button>
           </p>
-        </>
+        </motion.div>
       ) : (
-        <>
+        <motion.div
+          key="login"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+        >
           <h1>Login to continue</h1>
           <p className="subtitle">Enter your credentials to access your account.</p>
 
@@ -210,7 +224,7 @@ function AuthPage() {
             />
 
             <button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Signing in...' : 'Login'}
+              {isSubmitting ? 'Logging in...' : 'Login'}
             </button>
           </form>
 
@@ -220,21 +234,11 @@ function AuthPage() {
               Register
             </button>
           </p>
-        </>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {status.text && <p className={`form-status ${status.type}`}>{status.text}</p>}
-
-      <p className="test-route-note">
-        UI testing routes:{' '}
-        <a href="/verify-email" className="route-link">
-          Verify email
-        </a>
-        {' • '}
-        <a href="/dashboard" className="route-link">
-          Dashboard
-        </a>
-      </p>
     </AuthShell>
   )
 }
