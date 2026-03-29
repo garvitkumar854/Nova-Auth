@@ -2,14 +2,13 @@ const nodemailer = require('nodemailer');
 const config = require('../config/config');
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: config.BREVO_SMTP_HOST,
+    port: Number(config.BREVO_SMTP_PORT || 587),
+    secure: false,
     auth: {
-        type: 'OAuth2',
-        user: config.GOOGLE_USER,
-        clientId: config.GOOGLE_CLIENT_ID,
-        clientSecret: config.GOOGLE_CLIENT_SECRET,
-        refreshToken: config.GOOGLE_REFRESH_TOKEN
-    }
+        user: config.BREVO_SMTP_USER,
+        pass: config.BREVO_SMTP_PASS,
+    },
 });
 
 transporter.verify((error, success) => {
@@ -70,7 +69,7 @@ async function sendOTPEmail(to, otp) {
         `;
 
         const info = await transporter.sendMail({
-            from: config.GOOGLE_USER,
+            from: config.EMAIL_FROM,
             to,
             subject: 'Nova Auth verification code',
             text: `Nova Auth verification\n\nYour one-time code is: ${otp}\nThis code expires in 10 minutes.\n\nIf you did not request this code, you can ignore this email.`,
@@ -104,7 +103,7 @@ async function sendEmailVerifiedEmail(to) {
         `;
 
         const info = await transporter.sendMail({
-            from: config.GOOGLE_USER,
+            from: config.EMAIL_FROM,
             to,
             subject: 'Your email is now verified - Nova Auth',
             text: `Nova Auth account update\n\nYour email has been verified successfully.\nYou can now sign in and access all features.\n\nIf you did not perform this action, reset your password immediately.`,
