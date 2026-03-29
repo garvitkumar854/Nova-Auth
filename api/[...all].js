@@ -10,5 +10,12 @@ module.exports = async (req, res) => {
         console.log('Database connected successfully');
     }
 
+    // Vercel can pass stripped paths (e.g. /auth/register). Normalize to app's API prefix.
+    if (!req.url.startsWith('/api/')) {
+        req.url = `/api${req.url}`;
+    }
+
+    console.log(`[API] ${req.method} ${req.url}`);
+
     return app(req, res);
 };
