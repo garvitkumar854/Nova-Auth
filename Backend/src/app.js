@@ -24,8 +24,13 @@ app.get('/api/health', (req, res) => {
 	return res.status(200).json({ status: 'ok' });
 });
 
+app.get('/health', (req, res) => {
+	return res.status(200).json({ status: 'ok' });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 
 
 module.exports = app;
